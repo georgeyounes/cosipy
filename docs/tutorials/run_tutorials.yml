@@ -450,3 +450,19 @@ tutorials:
             checksum: 218d088159c6e11d0ddecc03ca9fa399
           COSI-SMEX/DC4/Data/Backgrounds/gal_DC4_bkg_Al26_binned_smoothed_fwhm_10.0deg.hdf5:
             checksum: bd6a32f8abee5b989b87149111487faa  
+
+    weighted_pulsation_crab:
+      notebook: phase_resolved_analysis/tutorial_weighted_pulsation_analysis_crab.ipynb
+      #ancillary_files:
+      #  - phase_resolved_analysis/cached_response_crab_for_timing/Crab_source_response_cache.h5
+      wasabi_files:
+        COSI-SMEX/DC4/Data/Sources/Crab_DC4_3months_unbinned_data_filtered_with_SAAcut.fits.gz:
+          checksum: 74ae81a979caf3e398b20091779851bb
+        COSI-SMEX/DC4/Data/Orientation/DC4_final_530km_3_month_with_slew_15sbins_GalacticEarth_SAA.fits:
+          checksum: ca94ff1d7a73c1f41479aaf598807673
+        COSI-SMEX/DC4/Data/Backgrounds/Total_DC4_BG_3months_unbinned_data_filtered_with_SAAcut_withSAAbck.fits.gz:
+          checksum: 73c8b23e43684da3b35c25499254202b
+        COSI-SMEX/DC4/Data/Responses/unpolarized_nfresponse_v1-01.pt:
+          checksum: bf2d0c16eac5954fb56489480c2602ca
+        COSI-SMEX/DC4/Data/Responses/nfbackground_v1-01.pt:
+          checksum: 52a4fb024930e18430bff80db882d3d5
