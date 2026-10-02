@@ -10,45 +10,108 @@ import torch
 
 
 class UnpolarizedAreaSphericalHarmonicsExpansion(AreaModel):
-    def __init__(self, area_input: Dict, worker_device: Union[str, int, torch.device],
-                 batch_size: int, compile_mode: CompileMode = "max-autotune-no-cudagraphs"):
-        super().__init__(compile_mode, batch_size, worker_device, area_input)
-    
-    def _init_model(self, input: Dict):
-        self._lmax        = input['lmax']
-        self._poly_degree = input['poly_degree']
-        self._poly_coeffs = input['poly_coeffs']
-        
-        self._conv_coeffs = self._convert_coefficients().to(self._worker_device)
-        self._sh_calculator = sphericart.torch.SphericalHarmonics(self._lmax)
-        
+
+    def __init__(
+            self,
+            area_input: Dict,
+            worker_device: Union[str, int, torch.device],
+            batch_size: int,
+            compile_mode: CompileMode = "max-autotune-no-cudagraphs"
+    ):
+        super().__init__(
+            compile_mode,
+            batch_size,
+            worker_device,
+            area_input
+        )
+
+    def _init_model(self, input):
+        self._lmax = input["lmax"]
+        self._poly_degree = input["poly_degree"]
+        self._poly_coeffs = input["poly_coeffs"]
+
+        # MPS does not support float64 tensors.
+        # Preserve the existing float64 behavior everywhere else.
+        device_type = torch.device(self._worker_device).type
+
+        self._area_dtype = (
+            torch.float32
+            if device_type == "mps"
+            else torch.float64
+        )
+
+        self._conv_coeffs = (
+            self._convert_coefficients()
+            .to(
+                device=self._worker_device,
+                dtype=self._area_dtype
+            )
+        )
+
+        self._sh_calculator = \
+            sphericart.torch.SphericalHarmonics(self._lmax)
+
         return self._horner_eval
     
     @property
     def context_dim(self) -> int:
         return 3
-    
-    def _convert_coefficients(self) -> torch.Tensor:
-        num_sh = (self._lmax + 1)**2
-        conv_coeffs = torch.zeros((num_sh, self._poly_degree + 1), dtype=torch.float64)
 
-        for cnt, (l, m) in enumerate((l, m) for l in range(self._lmax + 1) for m in range(-l, l + 1)):
-            idx = hp.Alm.getidx(self._lmax, l, abs(m))
+    def _convert_coefficients(self) -> torch.Tensor:
+
+        num_sh = (self._lmax + 1) ** 2
+
+        conv_coeffs = torch.zeros(
+            (num_sh, self._poly_degree + 1),
+            dtype=self._area_dtype
+        )
+
+        for cnt, (l, m) in enumerate(
+                (l, m)
+                for l in range(self._lmax + 1)
+                for m in range(-l, l + 1)
+        ):
+
+            idx = hp.Alm.getidx(
+                self._lmax,
+                l,
+                abs(m)
+            )
+
             if m == 0:
-                conv_coeffs[cnt] = self._poly_coeffs[0, :, idx]
+                conv_coeffs[cnt] = \
+                    self._poly_coeffs[0, :, idx]
+
             else:
-                fac = np.sqrt(2) * (-1)**m
-                val = self._poly_coeffs[0, :, idx] if m > 0 else -self._poly_coeffs[1, :, idx]
+                fac = np.sqrt(2) * (-1) ** m
+
+                val = (
+                    self._poly_coeffs[0, :, idx]
+                    if m > 0
+                    else -self._poly_coeffs[1, :, idx]
+                )
+
                 conv_coeffs[cnt] = fac * val
+
         return conv_coeffs.T
-    
+
     def _horner_eval(self, x: torch.Tensor) -> torch.Tensor:
-        x_64 = x.to(torch.float64).unsqueeze(1)
-        result = self._conv_coeffs[0].expand(x.shape[0], -1).clone()
+
+        x_eval = x.to(self._area_dtype).unsqueeze(1)
+
+        result = (
+            self._conv_coeffs[0]
+            .expand(x.shape[0], -1)
+            .clone()
+        )
+
         for i in range(1, self._conv_coeffs.size(0)):
-            result.mul_(x_64).add_(self._conv_coeffs[i])
+            result.mul_(x_eval).add_(
+                self._conv_coeffs[i]
+            )
+
         return result.to(torch.float32)
-    
+      
     def _compute_spherical_harmonics(self, dir_az: torch.Tensor, dir_polar: torch.Tensor) -> torch.Tensor:
         sin_p = torch.sin(dir_polar)
         xyz = torch.stack((

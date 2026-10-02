@@ -112,7 +112,15 @@ class TotalBackgroundDensityCMLPDGaussianCARQSFlow(DensityModel):
         self._period: float         = input["period"]
         self._slew_duration: float  = input["slew_duration"]
         self._obs_duration: float   = input["obs_duration"]
-        self._outlocs: torch.Tensor = input["outlocs"].to(self._worker_device)
+        #self._outlocs: torch.Tensor = input["outlocs"].to(self._worker_device)
+        # Allowing MPS Apple ARM GPU
+        if torch.device(self._worker_device).type == "mps":
+            self._outlocs = input["outlocs"].to(
+                device=self._worker_device,
+                dtype=torch.float32
+            )
+        else:
+            self._outlocs = input["outlocs"].to(self._worker_device)
         
         return self._load_model()
     

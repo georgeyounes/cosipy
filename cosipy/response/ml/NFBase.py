@@ -188,7 +188,11 @@ class DensityModel(BaseModel):
             end = min(start + self._batch_size, N)
             batch_len = end - start
                 
-            b_ctx = [t[start:end].to(self._worker_device) for t in args]
+            #b_ctx = [t[start:end].to(self._worker_device) for t in args]
+            b_ctx = [
+                self._to_worker_device(t[start:end])
+                for t in args
+            ]
             n_ctx = self._transform_context(*b_ctx)
             
             n_latent = self._model_op(context=n_ctx, mode="sampling", n_samples=batch_len)
@@ -227,13 +231,32 @@ class DensityModel(BaseModel):
             end = min(start + self._batch_size, N)
             batch_len = end - start
             
-            ctx, src, jac = self._transform_coordinates(*[t[start:end].to(self._worker_device) for t in args])
+            #ctx, src, jac = self._transform_coordinates(*[t[start:end].to(self._worker_device) for t in args])
+            # Float 64 to 32 for MPS compatibility
+            ctx, src, jac = self._transform_coordinates(
+                *[
+                    self._to_worker_device(t[start:end])
+                    for t in args
+                ]
+            )
             result[start:end] = self._model_op(src, ctx, mode="inference") * jac
             
             if progress_callback is not None:
                 progress_callback(batch_len)
 
         return result
+
+    def _to_worker_device(self, t):
+        if (
+                torch.device(self._worker_device).type == "mps"
+                and t.is_floating_point()
+        ):
+            return t.to(
+                device=self._worker_device,
+                dtype=torch.float32
+            )
+
+        return t.to(self._worker_device)
     
 class RateModel(ABC):
     def __init__(self, rate_input: Dict):
